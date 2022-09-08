@@ -4,39 +4,37 @@ void main() {
   runApp(const Center(child: MyApp()));
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyApp();
-}
-
-class _MyApp extends State<MyApp> {
-  int _count = 0;
-  void _increment() {
-    setState(() {
-      _count += 1;
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 200,
-      height: 100,
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: OutlinedButton(
-          onPressed: () {
-            print('pressed');
-            _increment();
-          },
-          child: Text(
-            '$_count',
-            textDirection: TextDirection.ltr,
-          ),
-        ),
-      ),
+    return MaterialApp(
+      home: Scaffold(
+          appBar: AppBar(title: const Text("MaterialApp"), actions: const []),
+          body: Column(children: [
+            const Padding(padding: EdgeInsets.only(top: 50)),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Padding(padding: EdgeInsets.only(right: 50)),
+              OutlinedButton(
+                onPressed: () {},
+                child: const Text('hello'),
+              ),
+              OutlinedButton(
+                onPressed: () {},
+                child: const Text('world'),
+              ),
+              OutlinedButton(
+                onPressed: () {},
+                child: const Text('column'),
+              ),
+              OutlinedButton(
+                onPressed: () {},
+                child: const Text('and row'),
+              ),
+              const Padding(padding: EdgeInsets.only(left: 50)),
+            ])
+          ])),
     );
   }
 }
