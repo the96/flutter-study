@@ -3,17 +3,11 @@ import 'package:flutter/material.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final cameras = await availableCameras();
-  final camera = cameras[2];
-  print(cameras.length);
-  print(camera);
-
-  runApp(Center(child: MyApp(camera: camera)));
+  runApp(const Center(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.camera});
-  final CameraDescription camera;
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +19,7 @@ class MyApp extends StatelessWidget {
       home: const Home(),
       routes: <String, WidgetBuilder>{
         '/home': (BuildContext context) => const Home(),
-        '/camera': (BuildContext context) => CameraView(camera: camera),
+        '/camera': (BuildContext context) => const CameraView(),
       },
     );
   }
@@ -65,34 +59,69 @@ class Home extends StatelessWidget {
 }
 
 class CameraView extends StatefulWidget {
-  const CameraView({super.key, required this.camera});
-
-  final CameraDescription camera;
+  const CameraView({super.key});
 
   @override
   State<CameraView> createState() => _CameraView();
 }
 
 class _CameraView extends State<CameraView> {
-  late CameraController _controller;
-  late Future<void> _initializeControllerFuture;
+  CameraController? _controller;
+  late List<CameraDescription> _cameras;
+
+  int _cameraIndex = 0;
 
   @override
   void initState() {
     super.initState();
 
-    _controller = CameraController(
-      widget.camera,
-      ResolutionPreset.high,
-    );
-
-    _initializeControllerFuture = _controller.initialize();
+    availableCameras().then((value) {
+      _cameras = value;
+      _initCameraController(_cameras[_cameraIndex]);
+    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (_controller != null) {
+      _controller!.dispose();
+    }
     super.dispose();
+  }
+
+  Future<void> _initCameraController(CameraDescription camera) async {
+    if (_controller != null) {
+      await _controller!.dispose();
+    }
+
+    try {
+      _controller = CameraController(camera, ResolutionPreset.max);
+
+      if (_controller == null) {
+        print('failed to initialize camera controller.');
+        return;
+      }
+
+      _controller!.addListener(() {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+
+      await _controller!.initialize();
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  void nextCamera() {
+    if (_cameraIndex + 1 >= _cameras.length) {
+      _cameraIndex = 0;
+    } else {
+      _cameraIndex += 1;
+    }
+
+    _initCameraController(_cameras[_cameraIndex]).then((value) => {});
   }
 
   @override
@@ -106,23 +135,25 @@ class _CameraView extends State<CameraView> {
       body: Container(
         color: Colors.blueGrey[100],
         child: Center(
-          child: FutureBuilder<void>(
-            future: _initializeControllerFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.done) {
-                return CameraPreview(_controller);
-              } else {
-                return const CircularProgressIndicator();
-              }
-            },
-          ),
+          child: _cameraWidgetWithLoading(),
         ),
       ),
       floatingActionButton: FloatingActionButton(
-          onPressed: () => {},
+          onPressed: () => {nextCamera()}, // カメラ切り替えボタンは別で用意したいが一旦はシャッターボタンで代用
           tooltip: 'shutter',
           child: const Icon(Icons.camera)),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
+  }
+
+  Widget _cameraWidgetWithLoading() {
+    if (_controller == null) {
+      return Row(children: const [
+        CircularProgressIndicator(),
+        Text('カメラ準備中'),
+      ]);
+    } else {
+      return CameraPreview(_controller!);
+    }
   }
 }
