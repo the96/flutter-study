@@ -1,5 +1,10 @@
+import 'dart:typed_data';
+import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image/image.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +73,7 @@ class CameraView extends StatefulWidget {
 class _CameraView extends State<CameraView> {
   CameraController? _controller;
   late List<CameraDescription> _cameras;
+  final GlobalKey _globalKey = GlobalKey();
 
   int _cameraIndex = 0;
 
@@ -121,7 +127,56 @@ class _CameraView extends State<CameraView> {
       _cameraIndex += 1;
     }
 
+    // インカメ使わない
+    if (_cameraIndex == 1) {
+      return nextCamera();
+    }
+
     _initCameraController(_cameras[_cameraIndex]).then((value) => {});
+  }
+
+  void prevCamera() {
+    if (_cameraIndex > 0) {
+      _cameraIndex -= 1;
+    } else {
+      _cameraIndex = _cameras.length - 1;
+    }
+
+    // インカメ使わない
+    if (_cameraIndex == 1) {
+      return prevCamera();
+    }
+
+    _initCameraController(_cameras[_cameraIndex]).then((value) => {});
+  }
+
+  void takePicture() async {
+    if (_controller == null) {
+      return;
+    }
+
+    final _picture = await _controller!.takePicture();
+    final Uint8List _picture_buffer = await _picture.readAsBytes();
+    await ImageGallerySaver.saveImage(_picture_buffer);
+
+    RenderRepaintBoundary rrb =
+        _globalKey.currentContext?.findRenderObject() as RenderRepaintBoundary;
+    final overlay = await rrb.toImage();
+    final overlayByteData =
+        await overlay.toByteData(format: ImageByteFormat.png);
+    final Uint8List? overlayBuffer = overlayByteData?.buffer.asUint8List();
+    await ImageGallerySaver.saveImage(overlayBuffer!);
+
+    final _pictureImage = decodeImage(_picture_buffer);
+    final _overlayImage = copyResize(
+      decodeImage(overlayBuffer)!,
+      width: _pictureImage!.width,
+    );
+
+    final _compositeImage = drawImage(_pictureImage!, _overlayImage!);
+
+    await ImageGallerySaver.saveImage(
+        Uint8List.fromList(encodePng(_compositeImage)));
   }
 
   @override
@@ -132,28 +187,48 @@ class _CameraView extends State<CameraView> {
         backgroundColor: Colors.black12.withAlpha(50),
       ),
       extendBodyBehindAppBar: true,
-      body: Container(
-        color: Colors.blueGrey[100],
-        child: Center(
-          child: _cameraWidgetWithLoading(),
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity! > 0) {
+            nextCamera();
+          } else {
+            prevCamera();
+          }
+        },
+        child: Container(
+          color: Colors.blueGrey[100],
+          child: Center(
+            child: _cameraWidgetWithLoading(context),
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
-          onPressed: () => {nextCamera()}, // カメラ切り替えボタンは別で用意したいが一旦はシャッターボタンで代用
+          onPressed: () => {takePicture()}, // カメラ切り替えボタンは別で用意したいが一旦はシャッターボタンで代用
           tooltip: 'shutter',
           child: const Icon(Icons.camera)),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
-  Widget _cameraWidgetWithLoading() {
+  Widget _cameraWidgetWithLoading(BuildContext context) {
     if (_controller == null) {
       return Row(children: const [
         CircularProgressIndicator(),
         Text('カメラ準備中'),
       ]);
     } else {
-      return CameraPreview(_controller!);
+      return CameraPreview(
+        _controller!,
+        child: RepaintBoundary(
+          key: _globalKey,
+          child: Center(
+            child: Text(
+              'OVERLAY TEXT',
+              style: Theme.of(context).textTheme.headline1,
+            ),
+          ),
+        ),
+      );
     }
   }
 }
