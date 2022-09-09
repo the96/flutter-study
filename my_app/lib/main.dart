@@ -1,11 +1,19 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const Center(child: MyApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final cameras = await availableCameras();
+  final camera = cameras[2];
+  print(cameras.length);
+  print(camera);
+
+  runApp(Center(child: MyApp(camera: camera)));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.camera});
+  final CameraDescription camera;
 
   @override
   Widget build(BuildContext context) {
@@ -16,8 +24,8 @@ class MyApp extends StatelessWidget {
       ),
       home: const Home(),
       routes: <String, WidgetBuilder>{
-        '/home': (BuildContext context) => new Home(),
-        '/camera': (BuildContext context) => new CameraView(),
+        '/home': (BuildContext context) => const Home(),
+        '/camera': (BuildContext context) => CameraView(camera: camera),
       },
     );
   }
@@ -56,8 +64,36 @@ class Home extends StatelessWidget {
   }
 }
 
-class CameraView extends StatelessWidget {
-  const CameraView({super.key});
+class CameraView extends StatefulWidget {
+  const CameraView({super.key, required this.camera});
+
+  final CameraDescription camera;
+
+  @override
+  State<CameraView> createState() => _CameraView();
+}
+
+class _CameraView extends State<CameraView> {
+  late CameraController _controller;
+  late Future<void> _initializeControllerFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = CameraController(
+      widget.camera,
+      ResolutionPreset.high,
+    );
+
+    _initializeControllerFuture = _controller.initialize();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,8 +105,17 @@ class CameraView extends StatelessWidget {
       extendBodyBehindAppBar: true,
       body: Container(
         color: Colors.blueGrey[100],
-        child: const Center(
-          child: Text('camera coming soon'),
+        child: Center(
+          child: FutureBuilder<void>(
+            future: _initializeControllerFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done) {
+                return CameraPreview(_controller);
+              } else {
+                return const CircularProgressIndicator();
+              }
+            },
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
