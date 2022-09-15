@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -7,9 +5,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:image/image.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:native_exif/native_exif.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -157,7 +152,7 @@ class _CameraView extends State<CameraView> {
       _cameraIndex = _cameras.length - 1;
     }
 
-    // インカメ使わない
+    // インカメ使わない、見たくないので
     if (_cameraIndex == 1) {
       return prevCamera();
     }
@@ -229,85 +224,10 @@ class _CameraView extends State<CameraView> {
     );
 
     final compositeImage = drawImage(pictureImage, overlayImage);
-    // final location = await fetchGeoLocation();
 
-    // compositeImage.exif.data[TiffImage.TAG_EXIF_IFD] = 4;
-    // compositeImage.exif.data[TiffImage.TAG_EXIF_IFD + 0x0001] = 'N';
-    // compositeImage.exif.data[TiffImage.TAG_EXIF_IFD + 0x0002] =
-    //     location.latitude;
-    // compositeImage.exif.data[TiffImage.TAG_EXIF_IFD + 0x0003] = 'E';
-    // compositeImage.exif.data[TiffImage.TAG_EXIF_IFD + 0x0004] =
-    //     location.longitude;
-
-    final path = await ImageGallerySaver.saveImage(
-      Uint8List.fromList(encodeJpg(compositeImage)),
-      isReturnImagePathOfIOS: true,
-    );
-
-    // await File(path).writeAsBytes(encodePng(compositeImage));
-
-    // print(path['filePath']);
-
-    // final ImagePicker _picker = ImagePicker();
-    // final XFile? pick_image =
-    //     await _picker.pickImage(source: ImageSource.gallery);
-
-    // print(pick_image!.path);
-
-    // final exif = await Exif.fromPath(pick_image!.path);
-    // print(exif);
-    // final orig_attributes = await exif.getAttributes();
-    // print(orig_attributes?.length);
-    // orig_attributes?.forEach((key, value) {
-    //   print('${key}: ${value}');
-    // });
-
-    // try {
-    //   await exif.writeAttribute('DateTimeOriginal', '2020:01:01 00:00:00');
-    //   await exif.writeAttributes({
-    //     'GPSLatitude': location.latitude,
-    //     'GPSLatitudeRef': 'N',
-    //     'GPSLongitude': location.longitude,
-    //     'GPSLongitudeRef': 'E',
-    //   });
-    // } catch (e, s) {
-    //   print(e);
-    //   print(s);
-    // }
-    // final attributes = await exif.getAttributes();
-    // print('after');
-    // print(attributes?.length);
-    // attributes?.forEach((key, value) {
-    //   print('${key}: ${value}');
-    // });
-
-    // await exif.close();
+    await ImageGallerySaver.saveImage(
+        Uint8List.fromList(encodeJpg(compositeImage)));
   }
-
-  // Future<Position> fetchGeoLocation() async {
-  //   bool serviceEnabled;
-  //   LocationPermission permission;
-
-  //   serviceEnabled = await Geolocator.isLocationServiceEnabled();
-  //   if (!serviceEnabled) {
-  //     return Future.error('Location services are disabled.');
-  //   }
-
-  //   permission = await Geolocator.checkPermission();
-  //   if (permission == LocationPermission.denied) {
-  //     permission = await Geolocator.requestPermission();
-  //     if (permission == LocationPermission.denied) {
-  //       return Future.error('Location permissions are denied');
-  //     }
-  //   }
-
-  //   if (permission == LocationPermission.deniedForever) {
-  //     return Future.error(
-  //         'Location permissions are permanently denied, we cannot request permissions.');
-  //   }
-
-  //   return await Geolocator.getCurrentPosition();
-  // }
 
   @override
   Widget build(BuildContext context) {
