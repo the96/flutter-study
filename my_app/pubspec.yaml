@@ -43,6 +43,7 @@ dependencies:
   image: ^3.2.0
   geolocator: ^9.0.1
   native_exif: ^0.4.0
+  photo_manager: ^2.2.1
 
 dev_dependencies:
   flutter_test:

@@ -83,6 +83,33 @@ class _CameraView extends State<CameraView> {
   late double _currentMinZoomLevel;
   DateTime scaleEndAt = DateTime.now();
 
+  Point _focusPoint = Point();
+  FocusMode _focusMode = FocusMode.auto;
+
+  double _exposureOffsetStepSize = 1;
+  double _maxExposureOffset = 0;
+  double _currentExposureOffset = 0;
+
+  ExposureMode _exposureMode = ExposureMode.auto;
+
+  String getFocusMode() {
+    switch (_focusMode) {
+      case FocusMode.auto:
+        return 'auto';
+      case FocusMode.locked:
+        return 'user';
+    }
+  }
+
+  String getExposureMode() {
+    switch (_exposureMode) {
+      case ExposureMode.auto:
+        return 'auto';
+      case ExposureMode.locked:
+        return 'user';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -121,10 +148,21 @@ class _CameraView extends State<CameraView> {
       });
 
       await _controller!.initialize();
-      _zoomLevel = 1.0;
-      _currentMaxZoomLevel = 12.01; // getMaxZoomLevelで得られる最大値を使うと写真が撮れなくなる
       _currentMinZoomLevel = await _controller!.getMinZoomLevel();
+      _exposureOffsetStepSize = await _controller!.getExposureOffsetStepSize();
+      _maxExposureOffset = await _controller!.getMaxExposureOffset();
+
+      setState(() {
+        _zoomLevel = 1.0;
+        _currentMaxZoomLevel = 12.01; // getMaxZoomLevelで得られる最大値を使うと写真が撮れなくなる
+        _currentExposureOffset = 0;
+      });
+
+      print('stepsize:$_exposureOffsetStepSize');
+      print('maxoffset:$_maxExposureOffset');
       await _controller!.setZoomLevel(_zoomLevel);
+      await _controller!.setFocusMode(_focusMode);
+      await _controller!.setExposureMode(_exposureMode);
     } catch (e) {
       print(e);
     }
@@ -188,18 +226,43 @@ class _CameraView extends State<CameraView> {
         _previewKey.currentContext!.findRenderObject() as RenderBox?;
 
     Size size = renderBox!.size;
-    double focus_x = dx / size.width;
-    double focus_y = dy / size.height;
-    if (focus_x < 0 || focus_x > 1 || focus_y < 0 || focus_y > 1) {
+    double focusX = dx / size.width;
+    double focusY = dy / size.height;
+    if (focusX < 0 || focusX > 1 || focusY < 0 || focusY > 1) {
       print('out of range: focus');
       return;
     }
-    await _controller!.setFocusMode(FocusMode.locked);
-    await _controller!.setFocusPoint(Offset(focus_x, focus_y));
+    _focusMode = FocusMode.locked;
+    _focusPoint = Point(focusX, focusY);
+
+    await _controller!.setFocusMode(_focusMode);
+    await _controller!.setFocusPoint(Offset(focusX, focusY));
   }
 
   void resetFocus() async {
-    await _controller!.setFocusMode(FocusMode.auto);
+    _focusMode = FocusMode.auto;
+    await _controller!.setFocusMode(_focusMode);
+  }
+
+  void toggleExposureMode() async {
+    if (_exposureMode == ExposureMode.auto) {
+      _exposureMode = ExposureMode.locked;
+      await _controller!.setExposureMode(_exposureMode);
+    } else if (_exposureMode == ExposureMode.locked) {
+      _exposureMode = ExposureMode.auto;
+      await _controller!.setExposureMode(_exposureMode);
+    }
+
+    _exposureOffsetStepSize = await _controller!.getExposureOffsetStepSize();
+    _maxExposureOffset = await _controller!.getMaxExposureOffset();
+
+    print('stepsize:$_exposureOffsetStepSize');
+    print('maxoffset:$_maxExposureOffset');
+    setState(() {});
+  }
+
+  void setExposure(double exposure) async {
+    _controller!.setExposureOffset(exposure);
   }
 
   void takePicture() async {
@@ -235,38 +298,53 @@ class _CameraView extends State<CameraView> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.black12.withAlpha(50),
+        title: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+          Text(
+              'FocusMode: ${getFocusMode()}\nExposureMode: ${getExposureMode()}\nExposure: $_currentExposureOffset'),
+          TextButton(
+            onPressed: () {
+              toggleExposureMode();
+            },
+            child: const Text('Alt'),
+          ),
+        ]),
       ),
       extendBodyBehindAppBar: true,
-      body: GestureDetector(
-        key: _previewKey,
-        onScaleUpdate: (ScaleUpdateDetails data) {
-          zoomCamera(data.scale);
-        },
-        onScaleEnd: (ScaleEndDetails end) {
-          zoomEnd();
-        },
-        onTapDown: (TapDownDetails details) {
-          print(
-              'x: ${details.localPosition.dx}, y: ${details.localPosition.dy}');
-          setFocus(details.localPosition.dx, details.localPosition.dy);
-        },
-        onDoubleTap: () {
-          print('reset');
-          resetFocus();
-        },
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity! > 0) {
-            nextCamera();
-          } else if (details.primaryVelocity! < 0) {
-            prevCamera();
-          }
-        },
-        child: Container(
-          alignment: Alignment.bottomCenter,
-          margin: EdgeInsets.only(bottom: 48),
-          color: Colors.blueGrey[100],
-          child: _cameraWidgetWithLoading(context),
-        ),
+      body: Stack(
+        children: [
+          GestureDetector(
+            key: _previewKey,
+            onScaleUpdate: (ScaleUpdateDetails data) {
+              zoomCamera(data.scale);
+            },
+            onScaleEnd: (ScaleEndDetails end) {
+              zoomEnd();
+            },
+            onTapDown: (TapDownDetails details) {
+              print(
+                  'x: ${details.localPosition.dx}, y: ${details.localPosition.dy}');
+              setFocus(details.localPosition.dx, details.localPosition.dy);
+            },
+            onDoubleTap: () {
+              print('reset');
+              resetFocus();
+            },
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity! > 0) {
+                nextCamera();
+              } else if (details.primaryVelocity! < 0) {
+                prevCamera();
+              }
+            },
+            child: Container(
+              alignment: Alignment.bottomCenter,
+              margin: const EdgeInsets.only(bottom: 48),
+              color: Colors.blueGrey[100],
+              child: _cameraWidgetWithLoading(context),
+            ),
+          ),
+          _cameraController(context),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
           onPressed: () => {takePicture()}, // カメラ切り替えボタンは別で用意したいが一旦はシャッターボタンで代用
@@ -287,14 +365,61 @@ class _CameraView extends State<CameraView> {
         _controller!,
         child: RepaintBoundary(
           key: _overlayKey,
-          child: Center(
-            child: Text(
-              'OVERLAY TEXT',
-              style: Theme.of(context).textTheme.headline1,
-            ),
+          child: Stack(
+            children: [
+              Center(
+                child: Text(
+                  'OVERLAY TEXT',
+                  style: Theme.of(context).textTheme.headline1,
+                ),
+              ),
+              if (_focusMode == FocusMode.locked)
+                Positioned(
+                  top: _focusPoint.y as double,
+                  left: _focusPoint.x as double,
+                  child: Container(
+                    width: 5,
+                    height: 5,
+                    color: Colors.black,
+                  ),
+                ),
+            ],
           ),
         ),
       );
     }
+  }
+
+  Widget _cameraController(BuildContext context) {
+    return Center(
+      child: Stack(
+        children: [
+          if (_maxExposureOffset > 0 && _exposureMode != ExposureMode.auto)
+            Positioned(
+              bottom: 40,
+              left: 12,
+              width: 172,
+              child: Slider(
+                min: 0,
+                max: _maxExposureOffset,
+                value: _currentExposureOffset,
+                activeColor: Colors.lightBlue,
+                inactiveColor: Colors.blueGrey,
+                divisions: _exposureOffsetStepSize > 0
+                    ? _maxExposureOffset ~/ _exposureOffsetStepSize
+                    : 1000,
+                onChanged: (double value) {
+                  setState(() {
+                    _currentExposureOffset = value;
+                  });
+                },
+                onChangeEnd: ((value) {
+                  setExposure(value);
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
